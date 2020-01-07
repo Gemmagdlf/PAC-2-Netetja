@@ -34,6 +34,7 @@ L'objectiu del present treball serà la netetja i l'anàlisi del dataset per arr
 library(ggplot2)
 library(dplyr)
 library(missForest)
+library(mice)
 ```
 
 
@@ -49,7 +50,6 @@ El data set recull un conjunt de variables referents als passatgers del titanic,
 test <- read.csv('titanic-test.csv',stringsAsFactors = FALSE)
 train <- read.csv('titanic-train.csv', stringsAsFactors = FALSE)
 # Unim els dos jocs de dades en un només
-
 # Verifiquem l'estructura del joc de dades
 pander::pander(str(train))
 ```
@@ -63,7 +63,6 @@ train$Sex <- as.factor(train$Sex)
 train$SibSp <- as.factor(train$SibSp)
 train$Parch <- as.factor(train$Parch)
 train$Embarked <- as.factor(train$Embarked)
-
 summary(train)
 ```
 
@@ -71,7 +70,7 @@ Podem comprobar els diferents valors estadístics de les variables contínues i 
 
 # Integració i selecció de les dades d’interès a analitzar.
 
-Al ser una base de dades no molt amplia decidim mantenir tots els atributs disponibles
+Al ser una base de dades no molt amplia decidim mantenir tots els atributs disponibles. La vairable resposta la qual volem intentar predir amb els analisis és la vairable Survived, aixi dons el que volem samber és si amb les altres vairables sóm capacos de predir la supervivencia dels subjectes. 
 
 # Neteja de les dades.
 
@@ -79,34 +78,26 @@ En primer lloc mirem si tenim alguna variable amb valors mancants:
 
 ```{r}
 colSums(is.na(train))
-colSums(train=="")
 ```
 
-Veiem que la variable Age, Embarked, Fare, Syrvived tenen valors mancants. A continuació analitzem cada cas particular per estudiar quin tipus d'imputació és més apropiat.
+Veiem que la variable Agete valors mancants.  L'únic que considerem necessari respecte la depuració de dades és tractar amb els valors mancants ja que això pot influir en el nostre anàlisis. Per fer-ho adoptem dos criteris diferents en funció de si el valor mancant està en la variable resposta o la variable explicativa.
 
-* Variable Embarked: decidim que omplirem els valors missings amb el valor de moda que pren la variable, per fer-ho mirem les freqüències de cada categoria i assignem aquell valor als missings:
+
+* Variable Survived és la vairbale resposta, si hi hagues missings,  no els tractaríem, eliminem tupla. 
+
+
+* Missings vairbales explicatives: com sabem els missings poden tenir diversos origens. En aquest cas considrarem que es es trata d'un cas MAR: valors mancants que depenen de coses que hem observat. Per tant aplicarem la tècnica de Muliple imputation a través de la funcio `mice()`
 
 ```{r}
-table(train$Embarked)
-# Prenem valor "C" per als valors buits de la variable "Embarked"
-train$Embarked[train$Embarked==""]="C"
+train<- mice(train)
+train <- complete(train)
+
 ```
 
 
-* Variable Age: seguint la mateixa estratègia assignem el valor de la mitjana als valors mancants d'aquesta variable:
 
 
-```{r}
 
-# Prenem la mitjana  "Age"
-Age = train$Age
-exe <- missForest(Age)
-#Age
-#dd$Age[is.na(dd$Age)] <- mean(dd$Age,na.rm=T)
-```
-
-
-* Variable : 
 
 ## Identificació i tractament de valors extrems.
 
@@ -146,6 +137,7 @@ Fem una breu descripció gràfica bivariant amb la variable "survival" en enfron
 * Visualitzem la relació entre les variables "sex" i "survival":
 
 ```{r ,echo=FALSE,  out.width = "70%", fig.align="center"}
+filas=dim(train)[1]
 ggplot(data=train[1:filas,],aes(x=Sex,fill=Survived))+geom_bar()
 ```
 
@@ -167,7 +159,17 @@ ggplot(data = train[1:filas,],aes(x=Pclass,fill=Survived))+geom_bar(position="fi
 ```
 
 
+Sembla que sovreviuen més els Subejctes de primera classe.
 
+
+*  suopervivencia en funció del nombre de germans
+
+```{r}
+ggplot(data = train[1:filas,],aes(x=SibSp,fill=Survived))+geom_bar(position="fill")+ylab("Frequència")
+```
+
+
+Tot i que es curios com a relació semblaria que a ménys germans més possibilitats de sobreviure.
 
 ## Comprovació de la normalitat i homogeneïtat de la variància.
 
@@ -209,7 +211,7 @@ library(car)
 leveneTest(train$Age,train$Survived)  
 ```
 
-Amb el p-valor >; 0.05 viem que no tenim raons per rebutjar la hipòtesis nul·la i per tant considerem que la variància del grup de gent que va morir és igual a la de grup de gent que va sobreviure.
+Amb el p-valor > 0.05 viem que no tenim raons per rebutjar la hipòtesis nul·la i per tant considerem que la variància del grup de gent que va morir és igual a la de grup de gent que va sobreviure.
 
 * Fare:
 
@@ -323,15 +325,12 @@ Així, hem comprovat que totes les variables categòriques están molt relaciona
 Per últim, generarem un model per tal de predir els futurs resultats de supervivència per altres mostres amb els mateixos atributs:
 
 ```{r}
+
 library(randomForest)
-
-modelo <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare +
-                                            Embarked + Cabin,
-                      data=train, 
-                      importance=TRUE, 
-                      ntree=2000)
-
+modelo <- randomForest(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare +Embarked , data=train,  importance=TRUE, ntree=2000)
 modelo
+
+
 ``` 
 
 # Representació dels resultats a partir de taules i gràfiques.
